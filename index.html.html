@@ -1148,7 +1148,12 @@ async function renderAdmin(){
     return `<tr>
       <td style="font-weight:600">${u.nome||'—'}</td>
       <td>${u.login||'—'}</td>
-      <td><span class="chave-mono">${u.chave}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="chave-mono" style="font-size:12px">${u.chave}</span>
+          <button onclick="copiarChave('${u.chave}',this)" style="background:var(--gray);border:1px solid var(--gray2);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Sora',sans-serif;color:var(--text2);white-space:nowrap;transition:all .2s" title="Copiar chave">📋 Copiar</button>
+        </div>
+      </td>
       <td>${u.plano==='3meses'?'3 Meses':u.plano==='6meses'?'6 Meses':'1 Ano'}</td>
       <td>${fmtD(u.data_expiracao)} ${dias<0?`<span style="color:var(--red);font-size:11px">(${Math.abs(dias)}d atraso)</span>`:dias<=30?`<span style="color:var(--amber);font-size:11px">(${dias}d)</span>`:''}</td>
       <td><span class="badge ${stCls}">${stLabel}</span></td>
@@ -1212,7 +1217,7 @@ async function renderAdmin(){
       <div class="card">
         <div class="card-header"><div class="card-title">👥 Todos os usuários</div></div>
         <div class="table-wrap"><table>
-          <thead><tr><th style="width:130px">Nome</th><th>Login</th><th style="width:180px">Chave</th><th>Plano</th><th>Expira</th><th>Status</th><th style="width:220px">Ações</th></tr></thead>
+          <thead><tr><th style="width:130px">Nome</th><th>Login</th><th style="width:240px">Chave</th><th>Plano</th><th>Expira</th><th>Status</th><th style="width:220px">Ações</th></tr></thead>
           <tbody>${rows||`<tr><td colspan="7"><div class="empty">Nenhum usuário cadastrado</div></td></tr>`}</tbody>
         </table></div>
       </div>
@@ -1291,6 +1296,19 @@ async function adminDesbloquear(id){
     closeModal('modal-admin-action');renderAdmin();
   };
   document.getElementById('modal-admin-action').classList.add('open');
+}
+
+function copiarChave(chave, btn){
+  navigator.clipboard.writeText(chave).then(()=>{
+    const original = btn.innerHTML;
+    btn.innerHTML = '✅ Copiado!';
+    btn.style.background = 'var(--green2)';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = '#b5dfc9';
+    setTimeout(()=>{ btn.innerHTML = original; btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; }, 2000);
+  }).catch(()=>{
+    prompt('Copie a chave abaixo:', chave);
+  });
 }
 
 // =============================================
