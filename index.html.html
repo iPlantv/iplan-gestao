@@ -638,9 +638,11 @@ async function finalizarCadastro(){
   if(!senha || senha.length < 6){ err.textContent='Senha deve ter pelo menos 6 caracteres.'; err.style.display='block'; return; }
   if(senha !== senha2){ err.textContent='Senhas não conferem.'; err.style.display='block'; return; }
 
-  // Verificar se login já existe
-  const rc = await api(`iplan_usuarios?login=eq.${login}&select=id`);
-  if(rc.ok){ const ex = await rc.json(); if(ex.length){ err.textContent='Este login já está em uso. Escolha outro.'; err.style.display='block'; return; } }
+  // Verificar se login já existe (só se não for null)
+  if(login){
+    const rc = await api(`iplan_usuarios?login=eq.${login}&select=id`);
+    if(rc.ok){ const ex = await rc.json(); if(ex.length){ err.textContent='Este login já está em uso. Escolha outro.'; err.style.display='block'; return; } }
+  }
 
   const u = S.usuarioTemp;
   const r = await api(`iplan_usuarios?id=eq.${u.id}`, {
@@ -1243,7 +1245,7 @@ async function adminSalvarChave(){
   const expiracao = addMonths(today(), mesesMap[plano]);
   const r = await api('iplan_usuarios',{
     method:'POST',
-    body:JSON.stringify({nome, login:'', senha:'', plano, data_inicio:today(), data_expiracao:expiracao, status:'pendente', chave:chaveTemp, device_id:''})
+    body:JSON.stringify({nome, login: null, senha: null, plano, data_inicio:today(), data_expiracao:expiracao, status:'pendente', chave:chaveTemp, device_id:''})
   });
   if(!r.ok){err.textContent='Erro ao salvar chave.';err.style.display='block';return;}
   chaveTemp=null;
