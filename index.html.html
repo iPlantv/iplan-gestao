@@ -513,14 +513,16 @@ function toggleAuthTab(t){
 }
 
 function fmtChaveInput(el){
-  let v = el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
-  let out = 'IPLAN-';
-  const body = v.replace(/^IPLAN/,'');
-  const clean = body.replace(/[^A-Z0-9]/g,'');
-  if(clean.length<=4) out += clean;
-  else if(clean.length<=8) out += clean.slice(0,4)+'-'+clean.slice(4);
-  else out += clean.slice(0,4)+'-'+clean.slice(4,8)+'-'+clean.slice(8,12);
-  el.value = out;
+  // Remove tudo que não for letra ou número e coloca em maiúsculo
+  let raw = el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  // Remove o prefixo IPLAN se já estiver no início
+  if(raw.startsWith('IPLAN')) raw = raw.slice(5);
+  // Pega só os 12 caracteres do corpo
+  raw = raw.slice(0,12);
+  // Formata em grupos de 4
+  let parts = [];
+  for(let i=0;i<raw.length;i+=4) parts.push(raw.slice(i,i+4));
+  el.value = 'IPLAN' + (parts.length ? '-' + parts.join('-') : '');
 }
 
 async function verificarChave(){
