@@ -747,7 +747,7 @@ function renderApp(){
   bindVendaEvents();
 }
 
-function setAba(a){ S.aba=a; renderApp(); }
+function setAba(a){ S.aba=a; S.abrirParcelas=null; renderApp(); }
 function setFiltroV(f){ S.filtroVenda=f; renderApp(); }
 function logout(){ S.usuario=null; S.clientes=[]; S.vendas=[]; S.parcelas={}; S.tela='ativacao'; render(); }
 
@@ -865,6 +865,10 @@ function renderVendas(){
 }
 
 function bindVendaEvents(){
+  // Reabrir parcelas se havia uma aberta antes
+  if(S.abrirParcelas){
+    setTimeout(()=>verParcelas(S.abrirParcelas), 80);
+  }
   const vc=document.getElementById('v-carta');const vp=document.getElementById('v-pct');const vpa=document.getElementById('v-parc');const prev=document.getElementById('v-prev');
   function calc(){
     if(!vc||!vp||!vpa||!prev)return;
@@ -910,6 +914,13 @@ async function addVenda(){
 }
 
 function verParcelas(vid){
+  // Se não estiver na aba vendas, navega primeiro
+  if(S.aba !== 'vendas'){
+    S.aba = 'vendas';
+    S.abrirParcelas = vid;
+    renderApp();
+    return;
+  }
   const v = S.vendas.find(x=>x.id===vid); if(!v) return;
   const cli = S.clientes.find(c=>c.id===v.cliente_id);
   const parc = S.parcelas[vid]||[];
@@ -917,6 +928,7 @@ function verParcelas(vid){
   const title = document.getElementById('parc-title');
   const tbl = document.getElementById('parc-table');
   if(!card)return;
+  S.abrirParcelas = vid;
   title.innerHTML = `📋 Parcelas — ${v.nome_cliente} ${tagG(cli?.grupo)} ${tagC(cli?.cota)}`;
   const rows = parc.map((p,i)=>{
     const sc = p.status==='recebido'?'bg':p.status==='cancelado'?'br':'ba';
@@ -932,7 +944,7 @@ function verParcelas(vid){
         ${p.status!=='cancelado'?`<button class="ic del" onclick="marcarP(${vid},${p.id},'cancelado')">❌</button>`:''}
       </div></td>
     </tr>`;}).join('');
-  tbl.innerHTML=`<thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Status</th><th style="width:100px">Ações</th></tr></thead><tbody>${rows}</tbody>`;
+  tbl.innerHTML=`<thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Status</th><th style="width:100px">Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5"><div class="empty">Nenhuma parcela cadastrada</div></td></tr>'}</tbody>`;
   card.style.display='block';
   card.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -941,8 +953,9 @@ async function marcarP(vid, pid, status){
   await api(`iplan_parcelas?id=eq.${pid}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({status})});
   const rp = await api(`iplan_parcelas?venda_id=eq.${vid}&order=num.asc`);
   if(rp.ok) S.parcelas[vid] = await rp.json();
+  S.abrirParcelas = vid;
   renderApp();
-  setTimeout(()=>verParcelas(vid),50);
+  setTimeout(()=>verParcelas(vid),80);
 }
 
 function openDelVenda(id){
@@ -976,7 +989,10 @@ function renderClientes(){
       <td>${c.telefone||'—'}</td>
       <td>${vCli.length}</td>
       <td style="font-weight:600;color:var(--navy2)">${totalC>0?fmtM(totalC):'—'}</td>
-      <td><button class="ic del" onclick="openDelCli(${c.id})">🗑️</button></td>
+      <td><div class="actions">
+        ${vCli.length>0?`<button class="ic ok" title="Ver parcelas" onclick="verParcelas(${vCli[0].id})">📋</button>`:''}
+        <button class="ic del" onclick="openDelCli(${c.id})">🗑️</button>
+      </div></td>
     </tr>`;}).join('');
 
   return `
