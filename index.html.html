@@ -795,6 +795,7 @@ function renderPainel(){
 function renderVendas(){
   const clientes = S.clientes;
   const vendas = S.vendas;
+  const mes = mesAtual();
   const optCli = clientes.map(c=>{
     const ex=[c.grupo?`G:${c.grupo}`:'',c.cota?`C:${c.cota}`:''].filter(Boolean).join(' | ');
     return `<option value="${c.id}">${c.nome}${ex?' — '+ex:''}`;
@@ -803,24 +804,34 @@ function renderVendas(){
   let filtradas = [...vendas];
   if(S.filtroVenda==='ativo') filtradas = filtradas.filter(v=>(S.parcelas[v.id]||[]).some(p=>p.status==='pendente'));
   if(S.filtroVenda==='concluido') filtradas = filtradas.filter(v=>(S.parcelas[v.id]||[]).every(p=>p.status==='recebido'));
+  if(S.filtroVenda==='pago_mes') filtradas = filtradas.filter(v=>(S.parcelas[v.id]||[]).some(p=>p.data_venc?.startsWith(mes)&&p.status==='recebido'));
+  if(S.filtroVenda==='nao_pago_mes') filtradas = filtradas.filter(v=>(S.parcelas[v.id]||[]).some(p=>p.data_venc?.startsWith(mes)&&p.status==='pendente'));
 
   const rows = filtradas.map(v=>{
     const cli = clientes.find(c=>c.id===v.cliente_id);
     const parc = S.parcelas[v.id]||[];
     const pends = parc.filter(p=>p.status==='pendente');
     const recs = parc.filter(p=>p.status==='recebido');
-    const prox = [...pends].sort((a,b)=>a.dataVenc.localeCompare(b.dataVenc))[0];
+    const prox = [...pends].sort((a,b)=>(a.data_venc||'').localeCompare(b.data_venc||''))[0];
     const ind = getIndicador(parc);
     const vp = parc[0]?.valor||0;
+    // Verificar parcela do mês
+    const parcMes = parc.filter(p=>p.data_venc?.startsWith(mes));
+    const pagouMes = parcMes.some(p=>p.status==='recebido');
+    const temMes = parcMes.length > 0;
+    const mesBadge = temMes ? (pagouMes
+      ? `<span class="badge bg" style="font-size:10px">✅ Pago este mês</span>`
+      : `<span class="badge br" style="font-size:10px">⏳ Pendente este mês</span>`)
+      : '';
     return `<tr>
-      <td><div class="nc"><div class="nc-n"><span class="ind ${ind.cls}" title="${ind.title}"></span>${v.nome_cliente}</div><div class="nc-t">${tagG(cli?.grupo)}${tagC(cli?.cota)}</div></div></td>
+      <td><div class="nc"><div class="nc-n"><span class="ind ${ind.cls}" title="${ind.title}"></span>${v.nome_cliente}</div><div class="nc-t">${tagG(cli?.grupo)}${tagC(cli?.cota)}${mesBadge}</div></div></td>
       <td>${fmtM(v.valor_carta)}</td><td>${v.percent_comissao}%</td>
       <td style="font-weight:600;color:var(--navy2)">${fmtM(v.valor_comissao_total)}</td>
       <td><span class="badge ba">${v.parcelamento}x de ${fmtM(vp)}</span></td>
-      <td>${prox?fmtD(prox.dataVenc):'—'}</td>
+      <td>${prox?fmtD(prox.data_venc):'—'}</td>
       <td>${recs.length}/${parc.length}</td>
       <td><div class="actions">
-        <button class="ic ok" title="Ver parcelas" onclick="verParcelas(${v.id})">📋</button>
+        <button class="ic ok" title="Ver parcelas" onclick="abrirParcelas(${v.id})">📋</button>
         <button class="ic del" title="Remover" onclick="openDelVenda(${v.id})">🗑️</button>
       </div></td>
     </tr>`;}).join('');
@@ -845,31 +856,38 @@ function renderVendas(){
     <div class="card">
       <div class="card-header">
         <div class="card-title">💰 Vendas <span style="font-size:12px;font-weight:400;color:var(--text3)">(${filtradas.length})</span></div>
-        <div style="display:flex;align-items:center;gap:10px">${legend()}
-          <div style="display:flex;gap:6px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${legend()}
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
             <button class="btn btn-sm ${S.filtroVenda==='todos'?'btn-primary':''}" onclick="setFiltroV('todos')">Todas</button>
             <button class="btn btn-sm ${S.filtroVenda==='ativo'?'btn-primary':''}" onclick="setFiltroV('ativo')">Em andamento</button>
             <button class="btn btn-sm ${S.filtroVenda==='concluido'?'btn-primary':''}" onclick="setFiltroV('concluido')">Concluídas</button>
+            <button class="btn btn-sm ${S.filtroVenda==='pago_mes'?'btn-primary':''}" style="${S.filtroVenda==='pago_mes'?'':'background:var(--green2);color:var(--green);border:none'}" onclick="setFiltroV('pago_mes')">✅ Pagos este mês</button>
+            <button class="btn btn-sm ${S.filtroVenda==='nao_pago_mes'?'btn-primary':''}" style="${S.filtroVenda==='nao_pago_mes'?'':'background:var(--red2);color:var(--red);border:none'}" onclick="setFiltroV('nao_pago_mes')">⏳ Pendentes este mês</button>
           </div>
         </div>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th style="width:180px">Cliente</th><th>Carta</th><th>%</th><th>Comissão</th><th>Parcelas</th><th>Próx. receb.</th><th>Prog.</th><th style="width:80px">Ações</th></tr></thead>
-        <tbody>${rows||`<tr><td colspan="8"><div class="empty">Nenhuma venda cadastrada</div></td></tr>`}</tbody>
+        <thead><tr><th style="width:200px">Cliente</th><th>Carta</th><th>%</th><th>Comissão</th><th>Parcelas</th><th>Próx. receb.</th><th>Prog.</th><th style="width:80px">Ações</th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="8"><div class="empty">Nenhuma venda encontrada</div></td></tr>`}</tbody>
       </table></div>
     </div>
     <div class="card" id="parc-card" style="display:none">
-      <div class="card-header"><div class="card-title" id="parc-title"></div></div>
+      <div class="card-header">
+        <div class="card-title" id="parc-title"></div>
+        <button class="btn btn-sm btn-cancel-m" onclick="document.getElementById('parc-card').style.display='none';S.abrirParcelas=null;">✕ Fechar</button>
+      </div>
       <div class="table-wrap"><table id="parc-table"></table></div>
     </div>`;
 }
 
 function bindVendaEvents(){
-  // Reabrir parcelas se havia uma aberta antes
   if(S.abrirParcelas){
-    setTimeout(()=>verParcelas(S.abrirParcelas), 80);
+    setTimeout(()=>verParcelas(S.abrirParcelas), 100);
   }
-  const vc=document.getElementById('v-carta');const vp=document.getElementById('v-pct');const vpa=document.getElementById('v-parc');const prev=document.getElementById('v-prev');
+  const vc=document.getElementById('v-carta');
+  const vp=document.getElementById('v-pct');
+  const vpa=document.getElementById('v-parc');
+  const prev=document.getElementById('v-prev');
   function calc(){
     if(!vc||!vp||!vpa||!prev)return;
     const carta=parseFloat(vc.value||0);const pct=parseFloat(vp.value||0);const parc=parseInt(vpa.value||0);
@@ -904,57 +922,66 @@ async function addVenda(){
   });
   if(!rv.ok){err.textContent='Erro ao salvar venda.';err.style.display='block';return;}
   const venda = (await rv.json())[0];
-  // Criar parcelas
-  const parcelas = gerarParcelas({...venda, data_venda: data});
-  for(const p of parcelas){
-    await api('iplan_parcelas', { method:'POST', prefer:'return=minimal', body: JSON.stringify({venda_id: venda.id, num:p.num, data_venc:p.dataVenc, valor:p.valor, status:'pendente'})});
+  // Criar parcelas com data_venc correto
+  const valorParcela = valorComissaoTotal / parc;
+  for(let i=0; i<parc; i++){
+    const dataVenc = addMonths(data, i);
+    await api('iplan_parcelas', { method:'POST', prefer:'return=minimal', body: JSON.stringify({venda_id: venda.id, num:i+1, data_venc:dataVenc, valor:valorParcela, status:'pendente'})});
   }
   await loadVendas();
+  S.abrirParcelas = null;
   renderApp();
+  // Rolar para a lista de vendas após salvar
+  setTimeout(()=>{
+    const card = document.querySelectorAll('.card')[1];
+    if(card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 200);
+}
+
+function abrirParcelas(vid){
+  S.abrirParcelas = vid;
+  if(S.aba !== 'vendas'){ S.aba='vendas'; renderApp(); return; }
+  verParcelas(vid);
 }
 
 function verParcelas(vid){
-  // Se não estiver na aba vendas, navega primeiro
-  if(S.aba !== 'vendas'){
-    S.aba = 'vendas';
-    S.abrirParcelas = vid;
-    renderApp();
-    return;
-  }
   const v = S.vendas.find(x=>x.id===vid); if(!v) return;
   const cli = S.clientes.find(c=>c.id===v.cliente_id);
   const parc = S.parcelas[vid]||[];
   const card = document.getElementById('parc-card');
   const title = document.getElementById('parc-title');
   const tbl = document.getElementById('parc-table');
-  if(!card)return;
+  if(!card) return;
   S.abrirParcelas = vid;
-  title.innerHTML = `📋 Parcelas — ${v.nome_cliente} ${tagG(cli?.grupo)} ${tagC(cli?.cota)}`;
-  const rows = parc.map((p,i)=>{
+  title.innerHTML = `📋 Parcelas — <strong>${v.nome_cliente}</strong> ${tagG(cli?.grupo)} ${tagC(cli?.cota)}`;
+  const rows = parc.map((p)=>{
     const sc = p.status==='recebido'?'bg':p.status==='cancelado'?'br':'ba';
-    const sl = p.status==='recebido'?'Recebido':p.status==='cancelado'?'Cancelado':'Pendente';
+    const sl = p.status==='recebido'?'✅ Recebido':p.status==='cancelado'?'❌ Cancelado':'⏳ Pendente';
     return `<tr>
-      <td>Parcela ${p.num}</td>
+      <td style="font-weight:600">Parcela ${p.num}</td>
       <td>${fmtD(p.data_venc)}</td>
-      <td style="font-weight:600;color:var(--navy2)">${fmtM(p.valor)}</td>
+      <td style="font-weight:700;color:var(--navy2)">${fmtM(p.valor)}</td>
       <td><span class="badge ${sc}">${sl}</span></td>
       <td><div class="actions">
-        ${p.status==='pendente'?`<button class="ic ok" onclick="marcarP(${vid},${p.id},'recebido')">✅</button>`:''}
-        ${p.status==='recebido'?`<button class="ic back" onclick="marcarP(${vid},${p.id},'pendente')">↩️</button>`:''}
-        ${p.status!=='cancelado'?`<button class="ic del" onclick="marcarP(${vid},${p.id},'cancelado')">❌</button>`:''}
+        ${p.status==='pendente'?`<button class="btn btn-sm btn-green" onclick="marcarP(${vid},${p.id},'recebido')">✅ Recebido</button>`:''}
+        ${p.status==='recebido'?`<button class="btn btn-sm btn-cancel-m" onclick="marcarP(${vid},${p.id},'pendente')">↩️ Desfazer</button>`:''}
+        ${p.status==='cancelado'?`<button class="btn btn-sm btn-primary" onclick="marcarP(${vid},${p.id},'pendente')">↩️ Reativar</button>`:''}
+        ${p.status!=='cancelado'?`<button class="ic del" onclick="marcarP(${vid},${p.id},'cancelado')" title="Cancelar parcela">❌</button>`:''}
       </div></td>
     </tr>`;}).join('');
-  tbl.innerHTML=`<thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Status</th><th style="width:100px">Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5"><div class="empty">Nenhuma parcela cadastrada</div></td></tr>'}</tbody>`;
+  tbl.innerHTML=`<thead><tr><th style="width:100px">Parcela</th><th>Vencimento</th><th>Valor</th><th>Status</th><th style="width:200px">Ações</th></tr></thead><tbody>${rows||'<tr><td colspan="5"><div class="empty">Nenhuma parcela</div></td></tr>'}</tbody>`;
   card.style.display='block';
-  card.scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 async function marcarP(vid, pid, status){
   await api(`iplan_parcelas?id=eq.${pid}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({status})});
   const rp = await api(`iplan_parcelas?venda_id=eq.${vid}&order=num.asc`);
   if(rp.ok) S.parcelas[vid] = await rp.json();
-  S.abrirParcelas = vid;
-  renderApp();
+  verParcelas(vid);
+  // Atualizar indicadores sem fechar parcelas
+  const tbody = document.querySelector('tbody');
+  if(tbody) renderApp();
   setTimeout(()=>verParcelas(vid),80);
 }
 
